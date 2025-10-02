@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Gate Access Management</title>
+<style>
+  body { font-family: Arial, sans-serif; text-align: center; margin: 0; padding: 20px; background: #f9f9f9; }
+  h1 { margin-bottom: 25px; }
+  input[type="password"] {
+    padding: 10px;
+    font-size: 18px;
+    width: 250px;
+    border-radius: 5px;
+    border: 1px solid #ccc;
+  }
+  button.login-btn {
+    background-color: #007bff;
+    border: none;
+    color: white;
+    font-size: 18px;
+    padding: 12px 40px;
+    border-radius: 25px;
+    cursor: pointer;
+    margin-left: 10px;
+    transition: background-color 0.3s ease;
+  }
+  button.login-btn:hover { background-color: #0056b3; }
+</style>
+</head>
+<body>
+
+<h1>Gate Access Management</h1>
+
+<input type="password" id="passwordInput" placeholder="Enter Password" />
+<button class="login-btn" onclick="submitLogin()">Login</button>
+
+<script>
+  function submitLogin() {
+    const password = document.getElementById('passwordInput').value;
+    fetch('/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: 'password=' + encodeURIComponent(password)
+    }).then(response => {
+      if (response.status === 200) {
+        window.location.href = '/devices.html';  // redirect on success
+      } else {
+        alert('Incorrect password. Please try again.');
+      }
+    }).catch(err => {
+      alert('Error connecting to server.');
+    });
+  }
+</script>
+
+</body>
+</html>

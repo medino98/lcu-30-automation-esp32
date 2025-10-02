@@ -1,0 +1,29 @@
+{
+  "idf.flashType": "UART",
+  "idf.port": "/dev/ttyACM0",
+  "idf.pythonInstallPath": "/usr/bin/python3",
+  "files.associations": {
+    "freertos.h": "c",
+    "freertosconfig.h": "c",
+    "esp_wifi.h": "c",
+    "softap.h": "c",
+    "stdio.h": "c",
+    "basic_http_server.h": "c",
+    "mdns.h": "c",
+    "esp_chip_info.h": "c",
+    "esp_log.h": "c",
+    "cstdlib": "c"
+  },
+  "idf.openOcdConfigs": [
+    "board/esp32c3-builtin.cfg"
+  ],
+  "idf.customExtraVars": {
+    "IDF_TARGET": "esp32c3"
+  },
+  "clangd.path": "/home/medin/.espressif/tools/esp-clang/esp-19.1.2_20250312/esp-clang/bin/clangd",
+  "clangd.arguments": [
+    "--background-index",
+    "--query-driver=/home/medin/.espressif/tools/riscv32-esp-elf/esp-14.2.0_20241119/riscv32-esp-elf/bin/riscv32-esp-elf-gcc",
+    "--compile-commands-dir=/home/medin/lcu-30-automation-esp32/build"
+  ]
+}

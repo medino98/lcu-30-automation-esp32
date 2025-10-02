@@ -1,0 +1,16 @@
+menu "mDNS configuration"
+
+    config MDNS_HOST_NAME
+        string "mDNS Host Name"
+        default "lcu30h-home"
+        help
+            Specify the domain name used in the mDNS service.
+            Note that webpage also take it as a part of URL where it will send GET/POST requests to.
+
+    config MDNS_INSTANCE
+        string "mDNS Instance Name"
+        default "LCU30H Gate Automation"
+        help
+            mDNS Instance Name for example to use
+
+endmenu
