@@ -6,9 +6,10 @@
 #include "esp_chip_info.h"
 #include "esp_random.h"
 #include "esp_log.h"
-#include "esp_vfs.h"
+#include "esp_vfs.h"s
 #include "cJSON.h"
 #include "basic_auth.h"
+#include "esp_spiffs.h"
 
 
 static const char *REST_TAG = "rest-server";
@@ -33,6 +34,8 @@ static const char *REST_TAG = "rest-server";
         }                                                                              \
     } while (0)
 
+#define WEB_MOUNT_POINT "/assets/pages"
+
 #define FILE_PATH_MAX (ESP_VFS_PATH_MAX + 128)
 #define SCRATCH_BUFSIZE (10240)
 
@@ -42,6 +45,41 @@ typedef struct rest_server_context {
 } rest_server_context_t;
 
 #define CHECK_FILE_EXTENSION(filename, ext) (strcasecmp(&filename[strlen(filename) - strlen(ext)], ext) == 0)
+
+/* add persistent server/context handles so stop_rest_server can free context */
+static httpd_handle_t s_server_handle = NULL;
+static rest_server_context_t *s_rest_context = NULL;
+
+esp_err_t init_fs(void)
+{
+    esp_vfs_spiffs_conf_t conf = {
+        .base_path = WEB_MOUNT_POINT,
+        .partition_label = NULL,
+        .max_files = 5,
+        .format_if_mount_failed = false
+    };
+    esp_err_t ret = esp_vfs_spiffs_register(&conf);
+
+    if (ret != ESP_OK) {
+        if (ret == ESP_FAIL) {
+            ESP_LOGE(REST_TAG, "Failed to mount or format filesystem");
+        } else if (ret == ESP_ERR_NOT_FOUND) {
+            ESP_LOGE(REST_TAG, "Failed to find SPIFFS partition");
+        } else {
+            ESP_LOGE(REST_TAG, "Failed to initialize SPIFFS (%s)", esp_err_to_name(ret));
+        }
+        return ESP_FAIL;
+    }
+
+    size_t total = 0, used = 0;
+    ret = esp_spiffs_info(NULL, &total, &used);
+    if (ret != ESP_OK) {
+        ESP_LOGE(REST_TAG, "Failed to get SPIFFS partition information (%s)", esp_err_to_name(ret));
+    } else {
+        ESP_LOGI(REST_TAG, "Partition size: total: %d, used: %d", total, used);
+    }
+    return ESP_OK;
+}
 
 /* Helper function to process POST requests into a string*/
 static esp_err_t process_post_helper(httpd_req_t *req, char* buf)
@@ -144,22 +182,6 @@ static esp_err_t rest_common_get_handler(httpd_req_t *req)
     /* Respond with an empty chunk to signal HTTP response completion */
     httpd_resp_send_chunk(req, NULL, 0);
     return ESP_OK;
-}   
-
-/* Simple handler for getting system handler */
-static esp_err_t system_info_get_handler(httpd_req_t *req)
-{
-    httpd_resp_set_type(req, "application/json");
-    cJSON *root = cJSON_CreateObject();
-    esp_chip_info_t chip_info;
-    esp_chip_info(&chip_info);
-    cJSON_AddStringToObject(root, "version", IDF_VER);
-    cJSON_AddNumberToObject(root, "cores", chip_info.cores);
-    const char *sys_info = cJSON_Print(root);
-    httpd_resp_sendstr(req, sys_info);
-    free((void *)sys_info);
-    cJSON_Delete(root);
-    return ESP_OK;
 }
 
 /* Send HTTP Response with the user whitelist (key-value: device-MAC address) */
@@ -172,48 +194,25 @@ static esp_err_t system_info_get_handler(httpd_req_t *req)
 
 // }
 
-// static esp_err_t login_post_handler(httpd_req_t *req) 
-// {
-//     char *payload = NULL; 
-//     if(!process_post_helper(req,payload)) return ESP_FAIL;
-//     cJSON *root = cJSON_Parse(payload);
-//     if (root == NULL) {
-//         if (root == NULL) {
-//             httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Invalid JSON");
-//             return ESP_FAIL;
-//         }
-//     }
-//     const cJSON *username = cJSON_GetObjectItem(root, "username");
-//     const cJSON *password = cJSON_GetObjectItem(root, "password");
-//     if (!cJSON_IsString(username) || !cJSON_IsString(password)) {
-//         // use username->valuestring and password->valuestring
-//     }
-//     cJSON_Delete(root);
-// }
-
-
-esp_err_t start_rest_server(const char *base_path)
+esp_err_t start_rest_server(void)
 {
+    const char *base_path = WEB_MOUNT_POINT;
     REST_CHECK(base_path, "wrong base path", err);
-    rest_server_context_t *rest_context = calloc(1, sizeof(rest_server_context_t));
-    REST_CHECK(rest_context, "No memory for rest context", err);
-    strlcpy(rest_context->base_path, base_path, sizeof(rest_context->base_path));
 
-    httpd_handle_t server = NULL;
+    if (s_server_handle) {
+        ESP_LOGW(REST_TAG, "HTTP server already running");
+        return ESP_OK;
+    }
+
+    s_rest_context = calloc(1, sizeof(rest_server_context_t));
+    REST_CHECK(s_rest_context, "No memory for rest context", err);
+    strlcpy(s_rest_context->base_path, base_path, sizeof(s_rest_context->base_path));
+
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
     config.uri_match_fn = httpd_uri_match_wildcard;
 
     ESP_LOGI(REST_TAG, "Starting HTTP Server");
-    REST_CHECK(httpd_start(&server, &config) == ESP_OK, "Start server failed", err_start);
-
-    /* URI handler for fetching system info */
-    httpd_uri_t system_info_get_uri = {
-        .uri = "/api/v1/system/info",
-        .method = HTTP_GET,
-        .handler = system_info_get_handler,
-        .user_ctx = rest_context
-    };
-    httpd_register_uri_handler(server, &system_info_get_uri);
+    REST_CHECK(httpd_start(&s_server_handle, &config) == ESP_OK, "Start server failed", err_start);
 
     /* URI handler for fetching device whitelist */
     // static const httpd_uri_t device_whitelist_uri= {
@@ -224,28 +223,38 @@ esp_err_t start_rest_server(const char *base_path)
     // };
     // httpd_register_uri_handler(server, &device_whitelist_uri);
 
-    /* URI handler for login handling */
-    // static const httpd_uri_t device_whitelist_uri= {
-    //     .uri       = "/api/v1/auth/login",
-    //     .method    = HTTP_POST,
-    //     .handler   = login_post_handler,
-    //     .user_ctx  = rest_context
-    // };
-    // httpd_register_uri_handler(server, &device_whitelist_uri);
-
-
     /* URI handler for getting web server files */
     httpd_uri_t common_get_uri = {
         .uri = "/*",
         .method = HTTP_GET,
         .handler = rest_common_get_handler,
-        .user_ctx = rest_context
+        .user_ctx = s_rest_context
     };
-    httpd_register_uri_handler(server, &common_get_uri);
+    httpd_register_uri_handler(s_server_handle, &common_get_uri);
 
     return ESP_OK;
 err_start:
-    free(rest_context);
+    free(s_rest_context);
 err:
     return ESP_FAIL;
 }
+
+esp_err_t stop_rest_server(void)
+{
+    if (!s_server_handle) {
+        ESP_LOGW(REST_TAG, "HTTP server not running");
+        return ESP_OK;
+    }
+
+    ESP_LOGI(REST_TAG, "Stopping HTTP Server");
+    httpd_stop(s_server_handle);
+    s_server_handle = NULL;
+
+    if (s_rest_context) {
+        free(s_rest_context);
+        s_rest_context = NULL;
+    }
+
+    return ESP_OK;
+}
+

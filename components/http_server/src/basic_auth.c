@@ -22,7 +22,7 @@ static char *http_auth_basic(const char *username, const char *password)
     return digest;
 }
 
-/* An HTTP GET handler */
+/* An HTTP GET handler for HTTP basic authentication*/
 esp_err_t basic_auth_handler(httpd_req_t *req)
 {
     char *buf = NULL;
@@ -53,13 +53,6 @@ esp_err_t basic_auth_handler(httpd_req_t *req)
             return ESP_FAIL;
         } else {
             ESP_LOGI(TAG, "Authenticated!");
-            // char *basic_auth_resp = NULL;
-            // httpd_resp_set_status(req, HTTPD_200);
-            // httpd_resp_set_type(req, "application/json");
-            // httpd_resp_set_hdr(req, "Connection", "keep-alive");
-            // asprintf(&basic_auth_resp, "{\"authenticated\": true,\"user\": \"%s\"}", basic_auth_info->username);
-            // httpd_resp_send(req, basic_auth_resp, strlen(basic_auth_resp));
-            // free(basic_auth_resp);
             free(auth_credentials);
             free(buf);
             return ESP_OK;
@@ -74,19 +67,3 @@ esp_err_t basic_auth_handler(httpd_req_t *req)
         return ESP_FAIL; // <-- Return ESP_FAIL if no header
     }
 }
-
-// static httpd_uri_t basic_auth = {
-//     .uri       = "/basic_auth",
-//     .method    = HTTP_GET,
-//     .handler   = basc_auth_get_handler,
-// };
-
-// static void httpd_register_basic_auth(httpd_handle_t server)
-// {
-//     basic_auth_info_t *basic_auth_info = calloc(1, sizeof(basic_auth_info_t));
-//     basic_auth_info->username = "ESP32";
-//     basic_auth_info->password = "ESP32Webserver";
-    
-//     basic_auth.user_ctx = basic_auth_info;
-//     httpd_register_uri_handler(server, &basic_auth);
-// }
